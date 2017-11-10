@@ -189,7 +189,7 @@ target_compile_options(${CDS_STATIC_LIBRARY} PRIVATE "${LIBCDS_PRIVATE_CXX_FLAGS
 #   * <prefix>/lib/cmake/<PROJECT-NAME>
 #   * <prefix>/lib/
 #   * <prefix>/include/
-set(config_install_dir "lib/cmake/${PROJECT_NAME}")
+set(config_install_dir "lib/cmake/LibCDS")
 set(include_install_dir "include")
 
 set(generated_dir "${CMAKE_CURRENT_BINARY_DIR}/generated")
