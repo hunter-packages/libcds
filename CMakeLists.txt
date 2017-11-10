@@ -6,7 +6,13 @@ if(POLICY CMP0042)
 endif()
 
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/build/cmake ${CMAKE_MODULE_PATH})
+include(HunterGate)
 include(TargetArch)
+
+HunterGate(
+    URL "https://github.com/ruslo/hunter/archive/v0.19.146.tar.gz"
+    SHA1 "aabd5d05ada427dcd8b2c6b6ed2ef7ad9325d589"
+)
 
 project(cds)
 
@@ -22,32 +28,23 @@ option(ENABLE_UNIT_TEST "Enable unit test" ON)
 option(ENABLE_STRESS_TEST "Enable stress test" ON)
 set(CMAKE_TARGET_ARCHITECTURE "" CACHE string "Target build architecture")
 
-find_package(Threads)
+find_package(Threads REQUIRED)
 
-if(TARGET boost::system AND TARGET boost::thread)
-    link_libraries(boost::system boost::thread)
-else()
-    find_package(Boost 1.50 COMPONENTS system thread)
+if(WITH_BOOST_ATOMIC)
+  set(atomic atomic)
+  set(boost_atomic Boost::atomic)
 endif()
-
-include_directories(${Boost_INCLUDE_DIRS})
+hunter_add_package(Boost COMPONENTS ${atomic} thread system)
+find_package(Boost 1.65 CONFIG REQUIRED ${atomic} thread system)
 
 if(NOT CMAKE_TARGET_ARCHITECTURE)
     target_architecture(CMAKE_TARGET_ARCHITECTURE)
 endif()
 
-if(WITH_BOOST_ATOMIC)
-    if(Boost_FOUND)
-        if(${Boost_MINOR_VERSION} GREATER 53)
-            set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DCDS_USE_BOOST_ATOMIC")
-            message(STATUS "Boost version allows using of boost.atomic: activated")
-        endif()
-    else()
-        if(TARGET boost::atomic)
-            link_libraries(boost::atomic)
-        endif()
-    endif()
-endif(WITH_BOOST_ATOMIC)
+if(APPLE)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_DARWIN_C_SOURCE")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_DARWIN_C_SOURCE")
+endif()
 
 if(WITH_ASAN)
     if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
@@ -139,7 +136,7 @@ message("Build type -- ${CMAKE_BUILD_TYPE}")
 message("Compiler version: ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
 message("System: ${CMAKE_SYSTEM_NAME} version: ${CMAKE_SYSTEM_VERSION}")
 message("Target architecture: ${CMAKE_TARGET_ARCHITECTURE}")
-if(CMAKE_BUILD_TYPE STREQUAL "DEBUG")
+if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     message("Compiler flags: ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_DEBUG} ${LIBCDS_PUBLIC_CXX_FLAGS} ${LIBCDS_PRIVATE_CXX_FLAGS}")
 else()
     message("Compiler flags: ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_RELEASE} ${LIBCDS_PUBLIC_CXX_FLAGS} ${LIBCDS_PRIVATE_CXX_FLAGS}")
@@ -172,12 +169,11 @@ set(SOURCES src/init.cpp
             src/dllmain.cpp)
 
 add_library(${CDS_SHARED_LIBRARY} SHARED ${SOURCES})
-set_target_properties(${CDS_SHARED_LIBRARY} PROPERTIES VERSION ${PROJECT_VERSION}
-        DEBUG_POSTFIX "_d")
 add_library(${CDS_STATIC_LIBRARY} STATIC ${SOURCES})
-set_target_properties(${CDS_STATIC_LIBRARY} PROPERTIES DEBUG_POSTFIX "_d")
 target_link_libraries(${CDS_SHARED_LIBRARY} PRIVATE ${CMAKE_THREAD_LIBS_INIT})
 target_link_libraries(${CDS_STATIC_LIBRARY} PRIVATE ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(${CDS_SHARED_LIBRARY} PUBLIC ${boost_atomic} Boost::thread Boost::system)
+target_link_libraries(${CDS_STATIC_LIBRARY} PUBLIC ${boost_atomic} Boost::thread Boost::system)
 target_include_directories(${CDS_SHARED_LIBRARY} INTERFACE "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>"
                                                             $<INSTALL_INTERFACE:include>)
 target_include_directories(${CDS_STATIC_LIBRARY} INTERFACE "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>"
