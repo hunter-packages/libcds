@@ -30,10 +30,13 @@ set(CMAKE_TARGET_ARCHITECTURE "" CACHE string "Target build architecture")
 
 find_package(Threads REQUIRED)
 
+set(boost_components)
 if(WITH_BOOST_ATOMIC)
   set(atomic atomic)
   set(boost_atomic Boost::atomic)
+  list(APPEND boost_components atomic)
 endif()
+list(APPEND boost_components thread system)
 hunter_add_package(Boost COMPONENTS ${atomic} thread system)
 find_package(Boost 1.65 CONFIG REQUIRED ${atomic} thread system)
 
@@ -169,10 +172,8 @@ set(SOURCES src/init.cpp
 
 add_library(${CDS_SHARED_LIBRARY} SHARED ${SOURCES})
 add_library(${CDS_STATIC_LIBRARY} STATIC ${SOURCES})
-target_link_libraries(${CDS_SHARED_LIBRARY} PRIVATE ${CMAKE_THREAD_LIBS_INIT})
-target_link_libraries(${CDS_STATIC_LIBRARY} PRIVATE ${CMAKE_THREAD_LIBS_INIT})
-target_link_libraries(${CDS_SHARED_LIBRARY} PUBLIC ${boost_atomic} Boost::thread Boost::system)
-target_link_libraries(${CDS_STATIC_LIBRARY} PUBLIC ${boost_atomic} Boost::thread Boost::system)
+target_link_libraries(${CDS_SHARED_LIBRARY} PUBLIC ${boost_atomic} Boost::thread Boost::system Threads::Threads)
+target_link_libraries(${CDS_STATIC_LIBRARY} PUBLIC ${boost_atomic} Boost::thread Boost::system Threads::Threads)
 target_include_directories(${CDS_SHARED_LIBRARY} INTERFACE "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>"
                                                             $<INSTALL_INTERFACE:include>)
 target_include_directories(${CDS_STATIC_LIBRARY} INTERFACE "$<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>"
@@ -182,11 +183,80 @@ target_compile_options(${CDS_STATIC_LIBRARY} PUBLIC "${LIBCDS_PUBLIC_CXX_FLAGS}"
 target_compile_options(${CDS_SHARED_LIBRARY} PRIVATE "${LIBCDS_PRIVATE_CXX_FLAGS}")
 target_compile_options(${CDS_STATIC_LIBRARY} PRIVATE "${LIBCDS_PRIVATE_CXX_FLAGS}")
 
-install(TARGETS ${CDS_SHARED_LIBRARY} EXPORT LibCDSConfig LIBRARY DESTINATION lib${LIB_SUFFIX} COMPONENT ${LIBRARIES_COMPONENT} NAMELINK_SKIP)
-install(TARGETS ${CDS_SHARED_LIBRARY} EXPORT LibCDSConfig LIBRARY DESTINATION lib${LIB_SUFFIX} COMPONENT ${HEADERS_COMPONENT} NAMELINK_ONLY)
-install(TARGETS ${CDS_STATIC_LIBRARY} EXPORT LibCDSConfig DESTINATION lib${LIB_SUFFIX} COMPONENT ${LIBRARIES_COMPONENT})
-install(EXPORT LibCDSConfig FILE LibCDSConfig.cmake NAMESPACE LibCDS:: DESTINATION lib/cmake/LibCDS)
-install(DIRECTORY ${PROJECT_SOURCE_DIR}/cds DESTINATION include COMPONENT ${HEADERS_COMPONENT})
+# Installation (https://github.com/forexample/package-example)
+
+# Layout. This works for all platforms:
+#   * <prefix>/lib/cmake/<PROJECT-NAME>
+#   * <prefix>/lib/
+#   * <prefix>/include/
+set(config_install_dir "lib/cmake/${PROJECT_NAME}")
+set(include_install_dir "include")
+
+set(generated_dir "${CMAKE_CURRENT_BINARY_DIR}/generated")
+
+# Configuration
+set(version_config "${generated_dir}/LibCDSConfigVersion.cmake")
+set(project_config "${generated_dir}/LibCDSConfig.cmake")
+set(TARGETS_EXPORT_NAME "LibCDSTargets")
+set(namespace "LibCDS::")
+
+# Include module with fuction 'write_basic_package_version_file'
+include(CMakePackageConfigHelpers)
+
+# Configure 'LibCDSConfigVersion.cmake'
+# Use:
+#   * PROJECT_VERSION
+write_basic_package_version_file(
+    "${version_config}" COMPATIBILITY SameMajorVersion
+)
+
+# Configure 'LibCDSConfig.cmake'
+# Use variables:
+#   * TARGETS_EXPORT_NAME
+#   * PROJECT_NAME
+configure_package_config_file(
+    "build/cmake/Config.cmake.in"
+    "${project_config}"
+    INSTALL_DESTINATION "${config_install_dir}"
+)
+
+# Targets:
+#   * <prefix>/lib/libcds.so
+#   * <prefix>/lib/libcds-s.a
+#   * header location after install: <prefix>/include/cds/init.h
+#   * headers can be included by C++ code `#include <cds/init.h>`
+install(
+    TARGETS ${CDS_SHARED_LIBRARY} ${CDS_STATIC_LIBRARY}
+    EXPORT "${TARGETS_EXPORT_NAME}"
+    LIBRARY DESTINATION "lib"
+    ARCHIVE DESTINATION "lib"
+    RUNTIME DESTINATION "bin"
+    INCLUDES DESTINATION "${include_install_dir}"
+)
+
+# Headers:
+#   * cds/init.h -> <prefix>/include/cds/init.h
+install(
+    DIRECTORY "cds"
+    DESTINATION "${include_install_dir}"
+    FILES_MATCHING PATTERN "*.h"
+)
+
+# Config
+#   * <prefix>/lib/cmake/LibCDS/LibCDSConfig.cmake
+#   * <prefix>/lib/cmake/LibCDS/LibCDSConfigVersion.cmake
+install(
+    FILES "${project_config}" "${version_config}"
+    DESTINATION "${config_install_dir}"
+)
+
+# Config
+#   * <prefix>/lib/cmake/LibCDS/LibCDSTargets.cmake
+install(
+    EXPORT "${TARGETS_EXPORT_NAME}"
+    NAMESPACE "${namespace}"
+    DESTINATION "${config_install_dir}"
+)
 
 if(WITH_TESTS)
     enable_testing()
