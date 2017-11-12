@@ -1,26 +1,23 @@
 
 INCLUDE(CheckCXXSourceCompiles)
 
-if (NOT GTEST_INCLUDE_DIRS)
-   find_package(GTest REQUIRED)
-endif()
-message("GTest: ${GTEST_INCLUDE_DIRS}, lib: ${GTEST_LIBRARIES}")
+hunter_add_package(GTest)
+find_package(GTest CONFIG REQUIRED)
 
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${GTEST_INCLUDE_DIRS}
 )
 
 set(CDS_TEST_LIBRARIES
     ${CDS_SHARED_LIBRARY}
-    ${GTEST_LIBRARIES}
-    ${Boost_THREAD_LIBRARY}
-    ${Boost_SYSTEM_LIBRARY}
-    ${CMAKE_THREAD_LIBS_INIT}
+    GTest::gtest
+    ${boost_atomic}
+    Boost::thread
+    Boost::system
     ${EXTERNAL_SYSTEM_LIBS}
 )
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DGTEST_LANG_CXX11") 
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DGTEST_LANG_CXX11")
 
 # Check if gtest INSTANTIATE_TEST_CASE_P macro supports 4th arg
 # The optional last argument to INSTANTIATE_TEST_CASE_P allows the user
